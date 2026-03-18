@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATS Report — ATS Pro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body class="app-page">
+
+<nav class="sidebar">
+  <div class="sidebar-brand"><span class="brand-icon">⚡</span><span class="brand-name">ATS<strong>Pro</strong></span></div>
+  <ul class="sidebar-nav">
+    <li class="nav-item"><a href="/dashboard">📊 Dashboard</a></li>
+    <li class="nav-item"><a href="/upload">📤 Analyze Resume</a></li>
+    <li class="nav-item" id="admin-link" style="display:none"><a href="/admin">🛡️ Admin Panel</a></li>
+  </ul>
+  <div class="sidebar-footer">
+    <div class="user-chip">
+      <img id="user-photo" src="" alt="" class="user-avatar" onerror="this.style.display='none'">
+      <div><div id="user-name" class="user-chip-name">—</div></div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Sign out</button>
+  </div>
+</nav>
+
+<main class="app-main">
+  <header class="app-header">
+    <div>
+      <a href="/dashboard" class="back-link">← Back to Dashboard</a>
+      <h1 class="page-title" id="report-title">Analysis Report</h1>
+    </div>
+    <button class="btn btn-primary" id="download-btn" onclick="downloadPDF()">⬇️ Download PDF</button>
+  </header>
+
+  <div id="report-content" class="report-content">
+    <div class="loading-state">Loading analysis…</div>
+  </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script>
+const firebaseConfig = {{ firebase_config | tojson }};
+if (firebaseConfig.apiKey) firebase.initializeApp(firebaseConfig);
+const RESUME_ID = {{ resume_id }};
+
+async function checkAuth() {
+  const res = await fetch('/api/auth/me', {credentials:'include'});
+  const d = await res.json();
+  if (!d.authenticated) { window.location.href = '/'; return; }
+  document.getElementById('user-name').textContent = d.user.name;
+  document.getElementById('user-photo').src = d.user.photo || '';
+  if (d.user.isAdmin) document.getElementById('admin-link').style.display = '';
+}
+
+async function loadReport() {
+  const res = await fetch(`/api/resumes/${RESUME_ID}`, {credentials:'include'});
+  if (!res.ok) { document.getElementById('report-content').innerHTML = '<div class="error-state">Report not found.</div>'; return; }
+  const data = await res.json();
+  document.getElementById('report-title').textContent = data.original_name;
+  renderReport(data);
+}
+
+function scoreColor(s) {
+  if (s >= 75) return '#16A34A';
+  if (s >= 50) return '#D97706';
+  return '#DC2626';
+}
+function scoreLabel(s) {
+  if (s >= 75) return 'Excellent';
+  if (s >= 50) return 'Good';
+  if (s >= 25) return 'Fair';
+  return 'Poor';
+}
+
+function renderReport(data) {
+  const a = data.analysis || {};
+  const overall = data.ats_score || 0;
+  const color   = scoreColor(overall);
+  const chips = (arr, cls) => (arr||[]).slice(0,20).map(k=>`<span class="chip ${cls}">${k}</span>`).join('');
+  const secs  = (arr, icon) => (arr||[]).map(s=>`<div class="section-item ${icon==='✅'?'sec-found':'sec-missing'}">${icon} ${s}</div>`).join('');
+  const sugs  = (arr) => (arr||[]).map(s=>`<div class="suggestion-item">${s}</div>`).join('');
+
+  document.getElementById('report-content').innerHTML = `
+    <div class="score-hero" style="--score-color:${color}">
+      <div class="score-ring">
+        <svg viewBox="0 0 120 120" class="ring-svg">
+          <circle cx="60" cy="60" r="52" fill="none" stroke="#E2E8F0" stroke-width="10"/>
+          <circle cx="60" cy="60" r="52" fill="none" stroke="${color}" stroke-width="10"
+            stroke-dasharray="${2*Math.PI*52}" stroke-dashoffset="${2*Math.PI*52*(1-overall/100)}"
+            stroke-linecap="round" transform="rotate(-90 60 60)" class="ring-progress"/>
+        </svg>
+        <div class="ring-label">
+          <div class="ring-score">${overall.toFixed(1)}</div>
+          <div class="ring-text">/ 100</div>
+        </div>
+      </div>
+      <div class="score-detail">
+        <div class="score-grade" style="color:${color}">${scoreLabel(overall)} Match</div>
+        <div class="score-breakdown">
+          <div class="score-row">
+            <span>Keyword Score</span>
+            <div class="mini-bar"><div class="mini-fill" style="width:${a.keyword_score||0}%;background:${color}"></div></div>
+            <span>${(a.keyword_score||0).toFixed(1)}%</span>
+          </div>
+          <div class="score-row">
+            <span>Skills Score</span>
+            <div class="mini-bar"><div class="mini-fill" style="width:${a.skills_score||0}%;background:${color}"></div></div>
+            <span>${(a.skills_score||0).toFixed(1)}%</span>
+          </div>
+          <div class="score-row">
+            <span>Sections Score</span>
+            <div class="mini-bar"><div class="mini-fill" style="width:${a.section_score||0}%;background:${color}"></div></div>
+            <span>${(a.section_score||0).toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="report-grid">
+      <div class="report-card">
+        <h3>✅ Matched Keywords <span class="count-badge">${(a.matched_keywords||[]).length}</span></h3>
+        <div class="chip-cloud">${chips(a.matched_keywords,'chip-green') || '<span class="muted">None matched</span>'}</div>
+      </div>
+      <div class="report-card">
+        <h3>❌ Missing Keywords <span class="count-badge">${(a.missing_keywords||[]).length}</span></h3>
+        <div class="chip-cloud">${chips(a.missing_keywords,'chip-red') || '<span class="muted">Great — none missing!</span>'}</div>
+      </div>
+      <div class="report-card">
+        <h3>🛠️ Matched Skills <span class="count-badge">${(a.matched_skills||[]).length}</span></h3>
+        <div class="chip-cloud">${chips(a.matched_skills,'chip-blue') || '<span class="muted">None detected</span>'}</div>
+      </div>
+      <div class="report-card">
+        <h3>⚠️ Missing Skills <span class="count-badge">${(a.missing_skills||[]).length}</span></h3>
+        <div class="chip-cloud">${chips(a.missing_skills,'chip-orange') || '<span class="muted">All covered!</span>'}</div>
+      </div>
+    </div>
+
+    <div class="report-row">
+      <div class="report-card report-card-wide">
+        <h3>📋 Resume Sections</h3>
+        <div class="sections-grid">
+          ${secs(a.sections_found, '✅')}
+          ${secs(a.sections_missing, '❌')}
+        </div>
+      </div>
+      <div class="report-card report-card-wide">
+        <h3>💡 Improvement Suggestions</h3>
+        <div class="suggestions-list">${sugs(a.suggestions) || '<p class="muted">No suggestions — great resume!</p>'}</div>
+      </div>
+    </div>
+  `;
+}
+
+function downloadPDF() {
+  window.open(`/api/resumes/${RESUME_ID}/report`, '_blank');
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', {method:'POST', credentials:'include'});
+  window.location.href = '/';
+}
+
+checkAuth();
+loadReport();
+</script>
+</body>
+</html>

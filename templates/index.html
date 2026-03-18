@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATS Resume Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body class="landing-page">
+
+<!-- Animated background -->
+<div class="bg-grid"></div>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-icon">⚡</span>
+    <span class="brand-name">ATS<strong>Pro</strong></span>
+  </div>
+  <div id="nav-auth">
+    <button class="btn btn-outline" onclick="triggerGoogleLogin()">Sign In</button>
+  </div>
+</nav>
+
+<main class="hero">
+  <div class="hero-badge">AI-Powered Resume Intelligence</div>
+  <h1 class="hero-title">
+    Beat the<br>
+    <span class="gradient-text">ATS Scanner</span><br>
+    Every Time
+  </h1>
+  <p class="hero-subtitle">
+    Upload your resume, paste a job description, and get an instant ATS score with
+    actionable keyword analysis and improvement suggestions.
+  </p>
+  <div class="hero-cta">
+    <button class="btn btn-primary btn-lg" onclick="triggerGoogleLogin()">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" alt="G">
+      Continue with Google
+    </button>
+    <span class="hero-note">Free • No credit card required</span>
+  </div>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="stat-num">95%</span><span class="stat-label">Accuracy</span></div>
+    <div class="stat-divider"></div>
+    <div class="stat"><span class="stat-num">50+</span><span class="stat-label">Skills Detected</span></div>
+    <div class="stat-divider"></div>
+    <div class="stat"><span class="stat-num">PDF</span><span class="stat-label">Reports</span></div>
+  </div>
+
+  <div class="feature-cards">
+    <div class="feature-card">
+      <div class="feature-icon">🔍</div>
+      <h3>Keyword Analysis</h3>
+      <p>Matches your resume against JD keywords with smart NLP tokenization.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🧠</div>
+      <h3>Skills Matching</h3>
+      <p>Identifies 50+ technical skills and highlights gaps instantly.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <h3>ATS Score</h3>
+      <p>Weighted scoring algorithm mirrors how real ATS systems rank resumes.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📄</div>
+      <h3>PDF Reports</h3>
+      <p>Download a professional analysis report to share with your recruiter.</p>
+    </div>
+  </div>
+</main>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script>
+  const firebaseConfig = {{ firebase_config | tojson }};
+  let firebaseReady = false;
+
+  if (firebaseConfig.apiKey) {
+    firebase.initializeApp(firebaseConfig);
+    firebaseReady = true;
+  }
+
+  async function triggerGoogleLogin() {
+    if (!firebaseReady) {
+      alert('Firebase is not configured. See setup guide in README.');
+      return;
+    }
+    const provider = new firebase.auth.GoogleAuthProvider();
+    try {
+      const result = await firebase.auth().signInWithPopup(provider);
+      const idToken = await result.user.getIdToken();
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          idToken,
+          user: {
+            uid: result.user.uid,
+            email: result.user.email,
+            displayName: result.user.displayName,
+            photoURL: result.user.photoURL,
+          }
+        }),
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = '/dashboard';
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Login failed: ' + e.message);
+    }
+  }
+
+  // Auto-redirect if already logged in
+  fetch('/api/auth/me', {credentials: 'include'})
+    .then(r => r.json())
+    .then(d => {
+      if (d.authenticated) window.location.href = '/dashboard';
+    });
+</script>
+</body>
+</html>

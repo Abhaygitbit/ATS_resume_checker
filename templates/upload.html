@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analyze Resume — ATS Pro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body class="app-page">
+
+<nav class="sidebar">
+  <div class="sidebar-brand"><span class="brand-icon">⚡</span><span class="brand-name">ATS<strong>Pro</strong></span></div>
+  <ul class="sidebar-nav">
+    <li class="nav-item"><a href="/dashboard">📊 Dashboard</a></li>
+    <li class="nav-item active"><a href="/upload">📤 Analyze Resume</a></li>
+    <li class="nav-item" id="admin-link" style="display:none"><a href="/admin">🛡️ Admin Panel</a></li>
+  </ul>
+  <div class="sidebar-footer">
+    <div class="user-chip">
+      <img id="user-photo" src="" alt="" class="user-avatar" onerror="this.style.display='none'">
+      <div><div id="user-name" class="user-chip-name">—</div></div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Sign out</button>
+  </div>
+</nav>
+
+<main class="app-main">
+  <header class="app-header">
+    <h1 class="page-title">Analyze Resume</h1>
+  </header>
+
+  <div class="upload-container">
+    <div class="upload-step">
+      <div class="step-label"><span class="step-num">1</span> Upload Resume</div>
+      <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" accept=".pdf,.docx" hidden onchange="handleFile(this.files[0])">
+        <div class="dropzone-icon">📎</div>
+        <div class="dropzone-text">Drop your resume here or <u>click to browse</u></div>
+        <div class="dropzone-hint">PDF or DOCX · Max 10MB</div>
+        <div id="file-preview" class="file-preview" style="display:none"></div>
+      </div>
+    </div>
+
+    <div class="upload-step">
+      <div class="step-label"><span class="step-num">2</span> Paste Job Description</div>
+      <textarea id="jd-input" class="jd-textarea" placeholder="Paste the full job description here. The more detail, the better the ATS analysis…" rows="12"></textarea>
+      <div class="jd-hint">Tip: Include the full posting including requirements, responsibilities, and desired skills.</div>
+    </div>
+
+    <div class="upload-step">
+      <div class="step-label"><span class="step-num">3</span> Analyze</div>
+      <button class="btn btn-primary btn-lg btn-full" id="analyze-btn" onclick="submitAnalysis()">
+        ⚡ Run ATS Analysis
+      </button>
+    </div>
+
+    <div id="progress-bar" class="progress-bar" style="display:none">
+      <div class="progress-fill" id="progress-fill"></div>
+      <div class="progress-label" id="progress-label">Parsing resume…</div>
+    </div>
+  </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script>
+const firebaseConfig = {{ firebase_config | tojson }};
+if (firebaseConfig.apiKey) firebase.initializeApp(firebaseConfig);
+
+async function checkAuth() {
+  const res = await fetch('/api/auth/me', {credentials:'include'});
+  const d = await res.json();
+  if (!d.authenticated) { window.location.href = '/'; return; }
+  document.getElementById('user-name').textContent = d.user.name;
+  document.getElementById('user-photo').src = d.user.photo || '';
+  if (d.user.isAdmin) document.getElementById('admin-link').style.display = '';
+}
+
+let selectedFile = null;
+function handleFile(file) {
+  selectedFile = file;
+  const preview = document.getElementById('file-preview');
+  preview.style.display = 'block';
+  preview.innerHTML = `<span>📄 ${file.name}</span> <span class="file-size">(${(file.size/1024).toFixed(1)} KB)</span>`;
+  document.getElementById('dropzone').classList.add('has-file');
+}
+
+// Drag-drop
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+async function submitAnalysis() {
+  if (!selectedFile) { alert('Please select a resume file.'); return; }
+  const jd = document.getElementById('jd-input').value.trim();
+  if (!jd) { alert('Please paste a job description.'); return; }
+
+  const btn = document.getElementById('analyze-btn');
+  btn.disabled = true;
+  btn.textContent = 'Analyzing…';
+  showProgress(30, 'Uploading and parsing resume…');
+
+  const fd = new FormData();
+  fd.append('resume', selectedFile);
+  fd.append('job_description', jd);
+
+  try {
+    showProgress(60, 'Running keyword & skill analysis…');
+    const res = await fetch('/api/resumes/upload', {
+      method: 'POST', body: fd, credentials: 'include'
+    });
+    showProgress(90, 'Generating report…');
+    const data = await res.json();
+    if (data.success) {
+      showProgress(100, 'Done! Redirecting…');
+      setTimeout(() => window.location.href = `/report/${data.resume_id}`, 600);
+    } else {
+      alert(data.error || 'Upload failed');
+      btn.disabled = false; btn.textContent = '⚡ Run ATS Analysis';
+      hideProgress();
+    }
+  } catch(e) {
+    alert('Network error: ' + e.message);
+    btn.disabled = false; btn.textContent = '⚡ Run ATS Analysis';
+    hideProgress();
+  }
+}
+
+function showProgress(pct, label) {
+  document.getElementById('progress-bar').style.display = 'block';
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = label;
+}
+function hideProgress() {
+  document.getElementById('progress-bar').style.display = 'none';
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', {method:'POST', credentials:'include'});
+  window.location.href = '/';
+}
+
+checkAuth();
+</script>
+</body>
+</html>

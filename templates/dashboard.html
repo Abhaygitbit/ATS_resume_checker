@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — ATS Pro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body class="app-page">
+
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <span class="brand-icon">⚡</span>
+    <span class="brand-name">ATS<strong>Pro</strong></span>
+  </div>
+  <ul class="sidebar-nav">
+    <li class="nav-item active"><a href="/dashboard">📊 Dashboard</a></li>
+    <li class="nav-item"><a href="/upload">📤 Analyze Resume</a></li>
+    <li class="nav-item" id="admin-link" style="display:none"><a href="/admin">🛡️ Admin Panel</a></li>
+  </ul>
+  <div class="sidebar-footer">
+    <div class="user-chip">
+      <img id="user-photo" src="" alt="" class="user-avatar" onerror="this.style.display='none'">
+      <div>
+        <div id="user-name" class="user-chip-name">—</div>
+        <div id="user-email" class="user-chip-email">—</div>
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Sign out</button>
+  </div>
+</nav>
+
+<main class="app-main">
+  <header class="app-header">
+    <h1 class="page-title">My Dashboard</h1>
+    <a href="/upload" class="btn btn-primary">+ New Analysis</a>
+  </header>
+
+  <div class="stats-row" id="stats-row">
+    <div class="stat-card">
+      <div class="stat-card-num" id="stat-total">—</div>
+      <div class="stat-card-label">Total Resumes</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-num" id="stat-avg">—</div>
+      <div class="stat-card-label">Avg ATS Score</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-num" id="stat-best">—</div>
+      <div class="stat-card-label">Best Score</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-num" id="stat-analyzed">—</div>
+      <div class="stat-card-label">Analyzed</div>
+    </div>
+  </div>
+
+  <section class="section">
+    <h2 class="section-title">Analysis History</h2>
+    <div id="resume-list" class="resume-list">
+      <div class="loading-state">Loading your resumes…</div>
+    </div>
+  </section>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script>
+const firebaseConfig = {{ firebase_config | tojson }};
+if (firebaseConfig.apiKey) firebase.initializeApp(firebaseConfig);
+
+async function checkAuth() {
+  const res = await fetch('/api/auth/me', {credentials:'include'});
+  const d = await res.json();
+  if (!d.authenticated) { window.location.href = '/'; return; }
+  document.getElementById('user-name').textContent  = d.user.name;
+  document.getElementById('user-email').textContent = d.user.email;
+  document.getElementById('user-photo').src = d.user.photo || '';
+  if (d.user.isAdmin) document.getElementById('admin-link').style.display = '';
+}
+
+async function loadResumes() {
+  const res = await fetch('/api/resumes', {credentials:'include'});
+  const resumes = await res.json();
+
+  const analyzed = resumes.filter(r => r.status === 'analyzed');
+  document.getElementById('stat-total').textContent = resumes.length;
+  document.getElementById('stat-analyzed').textContent = analyzed.length;
+
+  if (analyzed.length) {
+    const scores = analyzed.map(r => r.ats_score);
+    document.getElementById('stat-avg').textContent = (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) + '%';
+    document.getElementById('stat-best').textContent = Math.max(...scores).toFixed(1) + '%';
+  } else {
+    document.getElementById('stat-avg').textContent = 'N/A';
+    document.getElementById('stat-best').textContent = 'N/A';
+  }
+
+  const list = document.getElementById('resume-list');
+  if (!resumes.length) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">📄</div><p>No resumes yet.</p><a href="/upload" class="btn btn-primary">Analyze your first resume</a></div>';
+    return;
+  }
+
+  list.innerHTML = resumes.map(r => `
+    <div class="resume-card" onclick="window.location='/report/${r.id}'">
+      <div class="resume-card-left">
+        <div class="file-icon">${r.file_type === 'pdf' ? '📕' : '📘'}</div>
+        <div class="resume-card-info">
+          <div class="resume-name">${r.original_name}</div>
+          <div class="resume-meta">${r.created_at}</div>
+        </div>
+      </div>
+      <div class="resume-card-right">
+        <div class="score-badge ${scoreBadgeClass(r.ats_score)}">${r.ats_score ? r.ats_score.toFixed(1)+'%' : '—'}</div>
+        <span class="status-tag status-${r.status}">${r.status}</span>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();deleteResume(${r.id})">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function scoreBadgeClass(s) {
+  if (!s) return 'score-na';
+  if (s >= 75) return 'score-high';
+  if (s >= 50) return 'score-mid';
+  return 'score-low';
+}
+
+async function deleteResume(id) {
+  if (!confirm('Delete this resume?')) return;
+  await fetch(`/api/resumes/${id}`, {method:'DELETE', credentials:'include'});
+  loadResumes();
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', {method:'POST', credentials:'include'});
+  window.location.href = '/';
+}
+
+checkAuth();
+loadResumes();
+</script>
+</body>
+</html>
