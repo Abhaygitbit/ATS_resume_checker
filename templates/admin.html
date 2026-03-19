@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Admin Panel — ATS Pro</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -10,12 +10,24 @@
 </head>
 <body class="app-page">
 
-<nav class="sidebar">
-  <div class="sidebar-brand"><span class="brand-icon">⚡</span><span class="brand-name">ATS<strong>Pro</strong></span></div>
+<div class="mobile-topbar">
+  <button class="hamburger" onclick="toggleSidebar()">☰</button>
+  <span class="mobile-brand">⚡ ATS<strong>Pro</strong></span>
+  <span></span>
+</div>
+
+<div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <span class="brand-icon">⚡</span>
+    <span class="brand-name">ATS<strong>Pro</strong></span>
+    <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+  </div>
   <ul class="sidebar-nav">
-    <li class="nav-item"><a href="/dashboard">📊 Dashboard</a></li>
-    <li class="nav-item"><a href="/upload">📤 Analyze Resume</a></li>
-    <li class="nav-item active"><a href="/admin">🛡️ Admin Panel</a></li>
+    <li class="nav-item"><a href="/dashboard" onclick="closeSidebar()">📊 Dashboard</a></li>
+    <li class="nav-item"><a href="/upload" onclick="closeSidebar()">📤 Analyze Resume</a></li>
+    <li class="nav-item active"><a href="/admin" onclick="closeSidebar()">🛡️ Admin Panel</a></li>
   </ul>
   <div class="sidebar-footer">
     <div class="user-chip">
@@ -30,20 +42,18 @@
   <header class="app-header">
     <h1 class="page-title">🛡️ Admin Panel</h1>
     <div class="tab-switcher">
-      <button class="tab-btn active" onclick="switchTab('users')">Users</button>
-      <button class="tab-btn" onclick="switchTab('resumes')">Resumes</button>
+      <button class="tab-btn active" onclick="switchTab('users', this)">Users</button>
+      <button class="tab-btn" onclick="switchTab('resumes', this)">Resumes</button>
     </div>
   </header>
 
-  <!-- Platform Stats -->
-  <div class="stats-row" id="admin-stats">
-    <div class="stat-card"><div class="stat-card-num" id="a-users">—</div><div class="stat-card-label">Total Users</div></div>
-    <div class="stat-card"><div class="stat-card-num" id="a-resumes">—</div><div class="stat-card-label">Total Resumes</div></div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-card-num" id="a-users">—</div><div class="stat-card-label">Users</div></div>
+    <div class="stat-card"><div class="stat-card-num" id="a-resumes">—</div><div class="stat-card-label">Resumes</div></div>
     <div class="stat-card"><div class="stat-card-num" id="a-analyzed">—</div><div class="stat-card-label">Analyzed</div></div>
-    <div class="stat-card"><div class="stat-card-num" id="a-avg">—</div><div class="stat-card-label">Avg ATS Score</div></div>
+    <div class="stat-card"><div class="stat-card-num" id="a-avg">—</div><div class="stat-card-label">Avg Score</div></div>
   </div>
 
-  <!-- Users Tab -->
   <div id="tab-users" class="tab-content active">
     <div class="section">
       <h2 class="section-title">All Users</h2>
@@ -53,7 +63,6 @@
     </div>
   </div>
 
-  <!-- Resumes Tab -->
   <div id="tab-resumes" class="tab-content">
     <div class="section">
       <h2 class="section-title">All Resumes</h2>
@@ -70,8 +79,17 @@
 const firebaseConfig = {{ firebase_config | tojson }};
 if (firebaseConfig.apiKey) firebase.initializeApp(firebaseConfig);
 
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
 async function checkAuth() {
-  const res = await fetch('/api/auth/me', {credentials:'include'});
+  const res = await fetch('/api/auth/me', { credentials: 'include' });
   const d = await res.json();
   if (!d.authenticated) { window.location.href = '/'; return; }
   if (!d.user.isAdmin) { window.location.href = '/dashboard'; return; }
@@ -80,7 +98,7 @@ async function checkAuth() {
 }
 
 async function loadStats() {
-  const res = await fetch('/api/admin/stats', {credentials:'include'});
+  const res = await fetch('/api/admin/stats', { credentials: 'include' });
   const d = await res.json();
   document.getElementById('a-users').textContent = d.total_users;
   document.getElementById('a-resumes').textContent = d.total_resumes;
@@ -89,13 +107,13 @@ async function loadStats() {
 }
 
 async function loadUsers() {
-  const res = await fetch('/api/admin/users', {credentials:'include'});
+  const res = await fetch('/api/admin/users', { credentials: 'include' });
   const users = await res.json();
   const wrap = document.getElementById('users-table');
   if (!users.length) { wrap.innerHTML = '<div class="empty-state">No users yet.</div>'; return; }
   wrap.innerHTML = `
     <table class="data-table">
-      <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Resumes</th><th>Admin</th><th>Joined</th><th>Actions</th></tr></thead>
+      <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Resumes</th><th>Role</th><th>Actions</th></tr></thead>
       <tbody>
         ${users.map(u => `
           <tr>
@@ -104,9 +122,8 @@ async function loadUsers() {
             <td>${u.email}</td>
             <td><span class="count-badge">${u.resume_count}</span></td>
             <td><span class="status-tag ${u.is_admin ? 'status-analyzed' : 'status-pending'}">${u.is_admin ? 'Admin' : 'User'}</span></td>
-            <td>${u.created_at}</td>
             <td class="action-cell">
-              <button class="btn btn-ghost btn-sm" onclick="toggleAdmin(${u.id})">Toggle Admin</button>
+              <button class="btn btn-ghost btn-sm" onclick="toggleAdmin(${u.id})">Toggle</button>
               <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id})">Delete</button>
             </td>
           </tr>
@@ -116,13 +133,13 @@ async function loadUsers() {
 }
 
 async function loadResumes() {
-  const res = await fetch('/api/admin/resumes', {credentials:'include'});
+  const res = await fetch('/api/admin/resumes', { credentials: 'include' });
   const resumes = await res.json();
   const wrap = document.getElementById('resumes-table');
   if (!resumes.length) { wrap.innerHTML = '<div class="empty-state">No resumes yet.</div>'; return; }
   wrap.innerHTML = `
     <table class="data-table">
-      <thead><tr><th>#</th><th>User</th><th>File</th><th>ATS Score</th><th>Status</th><th>Date</th></tr></thead>
+      <thead><tr><th>#</th><th>User</th><th>File</th><th>Score</th><th>Status</th><th>Date</th></tr></thead>
       <tbody>
         ${resumes.map(r => `
           <tr>
@@ -146,25 +163,25 @@ function scoreBadgeClass(s) {
 }
 
 async function toggleAdmin(uid) {
-  await fetch(`/api/admin/users/${uid}/toggle-admin`, {method:'POST', credentials:'include'});
+  await fetch(`/api/admin/users/${uid}/toggle-admin`, { method: 'POST', credentials: 'include' });
   loadUsers(); loadStats();
 }
 
 async function deleteUser(uid) {
   if (!confirm('Delete this user and ALL their resumes?')) return;
-  await fetch(`/api/admin/users/${uid}`, {method:'DELETE', credentials:'include'});
+  await fetch(`/api/admin/users/${uid}`, { method: 'DELETE', credentials: 'include' });
   loadUsers(); loadStats();
 }
 
-function switchTab(tab) {
+function switchTab(tab, btn) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   document.getElementById(`tab-${tab}`).classList.add('active');
-  event.target.classList.add('active');
+  btn.classList.add('active');
 }
 
 async function logout() {
-  await fetch('/api/auth/logout', {method:'POST', credentials:'include'});
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
   window.location.href = '/';
 }
 

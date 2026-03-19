@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>ATS Resume Analyzer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -10,7 +10,6 @@
 </head>
 <body class="landing-page">
 
-<!-- Animated background -->
 <div class="bg-grid"></div>
 <div class="orb orb-1"></div>
 <div class="orb orb-2"></div>
@@ -20,9 +19,7 @@
     <span class="brand-icon">⚡</span>
     <span class="brand-name">ATS<strong>Pro</strong></span>
   </div>
-  <div id="nav-auth">
-    <button class="btn btn-outline" onclick="triggerGoogleLogin()">Sign In</button>
-  </div>
+  <button class="btn btn-outline" onclick="triggerGoogleLogin()">Sign In</button>
 </nav>
 
 <main class="hero">
@@ -47,7 +44,7 @@
   <div class="hero-stats">
     <div class="stat"><span class="stat-num">95%</span><span class="stat-label">Accuracy</span></div>
     <div class="stat-divider"></div>
-    <div class="stat"><span class="stat-num">50+</span><span class="stat-label">Skills Detected</span></div>
+    <div class="stat"><span class="stat-num">50+</span><span class="stat-label">Skills</span></div>
     <div class="stat-divider"></div>
     <div class="stat"><span class="stat-num">PDF</span><span class="stat-label">Reports</span></div>
   </div>
@@ -66,67 +63,107 @@
     <div class="feature-card">
       <div class="feature-icon">📊</div>
       <h3>ATS Score</h3>
-      <p>Weighted scoring algorithm mirrors how real ATS systems rank resumes.</p>
+      <p>Weighted scoring mirrors how real ATS systems rank resumes.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">📄</div>
       <h3>PDF Reports</h3>
-      <p>Download a professional analysis report to share with your recruiter.</p>
+      <p>Download a professional analysis report for your recruiter.</p>
     </div>
   </div>
 </main>
 
-<!-- Firebase SDK -->
+<!-- Loading overlay -->
+<div id="loading-overlay" class="loading-overlay" style="display:none;">
+  <div class="loading-box">
+    <div style="font-size:48px;">⚡</div>
+    <div class="loading-text">Signing you in...</div>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script>
-  const firebaseConfig = {{ firebase_config | tojson }};
-  let firebaseReady = false;
+const firebaseConfig = {{ firebase_config | tojson }};
+let firebaseReady = false;
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-  if (firebaseConfig.apiKey) {
-    firebase.initializeApp(firebaseConfig);
-    firebaseReady = true;
-  }
+if (firebaseConfig.apiKey) {
+  firebase.initializeApp(firebaseConfig);
+  firebaseReady = true;
 
-  async function triggerGoogleLogin() {
-    if (!firebaseReady) {
-      alert('Firebase is not configured. See setup guide in README.');
-      return;
+  // Handle redirect result when returning from Google on mobile
+  firebase.auth().getRedirectResult().then(async result => {
+    if (result && result.user) {
+      showLoading(true);
+      await sendTokenToServer(result.user);
     }
-    const provider = new firebase.auth.GoogleAuthProvider();
-    try {
+  }).catch(e => {
+    console.error('Redirect error:', e);
+    showLoading(false);
+  });
+}
+
+async function triggerGoogleLogin() {
+  if (!firebaseReady) {
+    alert('Firebase is not configured. See setup guide in README.');
+    return;
+  }
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try {
+    if (isMobile) {
+      showLoading(true);
+      await firebase.auth().signInWithRedirect(provider);
+    } else {
       const result = await firebase.auth().signInWithPopup(provider);
-      const idToken = await result.user.getIdToken();
-      const res = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          idToken,
-          user: {
-            uid: result.user.uid,
-            email: result.user.email,
-            displayName: result.user.displayName,
-            photoURL: result.user.photoURL,
-          }
-        }),
-        credentials: 'include'
-      });
-      const data = await res.json();
-      if (data.success) {
-        window.location.href = '/dashboard';
-      }
-    } catch (e) {
-      console.error(e);
-      alert('Login failed: ' + e.message);
+      showLoading(true);
+      await sendTokenToServer(result.user);
     }
+  } catch (e) {
+    console.error(e);
+    showLoading(false);
+    alert('Login failed: ' + e.message);
   }
+}
 
-  // Auto-redirect if already logged in
-  fetch('/api/auth/me', {credentials: 'include'})
-    .then(r => r.json())
-    .then(d => {
-      if (d.authenticated) window.location.href = '/dashboard';
+async function sendTokenToServer(user) {
+  try {
+    const idToken = await user.getIdToken();
+    const res = await fetch('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        idToken,
+        user: {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+        }
+      }),
+      credentials: 'include'
     });
+    const data = await res.json();
+    if (data.success) {
+      window.location.href = '/dashboard';
+    } else {
+      showLoading(false);
+      alert('Login failed. Please try again.');
+    }
+  } catch (e) {
+    showLoading(false);
+    alert('Network error: ' + e.message);
+  }
+}
+
+function showLoading(show) {
+  document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+}
+
+// Auto-redirect if already logged in
+fetch('/api/auth/me', { credentials: 'include' })
+  .then(r => r.json())
+  .then(d => { if (d.authenticated) window.location.href = '/dashboard'; });
 </script>
 </body>
 </html>

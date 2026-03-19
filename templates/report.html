@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>ATS Report — ATS Pro</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -10,12 +10,24 @@
 </head>
 <body class="app-page">
 
-<nav class="sidebar">
-  <div class="sidebar-brand"><span class="brand-icon">⚡</span><span class="brand-name">ATS<strong>Pro</strong></span></div>
+<div class="mobile-topbar">
+  <button class="hamburger" onclick="toggleSidebar()">☰</button>
+  <span class="mobile-brand">⚡ ATS<strong>Pro</strong></span>
+  <button class="btn btn-primary btn-sm" onclick="downloadPDF()">⬇️ PDF</button>
+</div>
+
+<div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <span class="brand-icon">⚡</span>
+    <span class="brand-name">ATS<strong>Pro</strong></span>
+    <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+  </div>
   <ul class="sidebar-nav">
-    <li class="nav-item"><a href="/dashboard">📊 Dashboard</a></li>
-    <li class="nav-item"><a href="/upload">📤 Analyze Resume</a></li>
-    <li class="nav-item" id="admin-link" style="display:none"><a href="/admin">🛡️ Admin Panel</a></li>
+    <li class="nav-item"><a href="/dashboard" onclick="closeSidebar()">📊 Dashboard</a></li>
+    <li class="nav-item"><a href="/upload" onclick="closeSidebar()">📤 Analyze Resume</a></li>
+    <li class="nav-item" id="admin-link" style="display:none"><a href="/admin" onclick="closeSidebar()">🛡️ Admin Panel</a></li>
   </ul>
   <div class="sidebar-footer">
     <div class="user-chip">
@@ -32,9 +44,8 @@
       <a href="/dashboard" class="back-link">← Back to Dashboard</a>
       <h1 class="page-title" id="report-title">Analysis Report</h1>
     </div>
-    <button class="btn btn-primary" id="download-btn" onclick="downloadPDF()">⬇️ Download PDF</button>
+    <button class="btn btn-primary desktop-only" onclick="downloadPDF()">⬇️ Download PDF</button>
   </header>
-
   <div id="report-content" class="report-content">
     <div class="loading-state">Loading analysis…</div>
   </div>
@@ -47,8 +58,17 @@ const firebaseConfig = {{ firebase_config | tojson }};
 if (firebaseConfig.apiKey) firebase.initializeApp(firebaseConfig);
 const RESUME_ID = {{ resume_id }};
 
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
 async function checkAuth() {
-  const res = await fetch('/api/auth/me', {credentials:'include'});
+  const res = await fetch('/api/auth/me', { credentials: 'include' });
   const d = await res.json();
   if (!d.authenticated) { window.location.href = '/'; return; }
   document.getElementById('user-name').textContent = d.user.name;
@@ -57,7 +77,7 @@ async function checkAuth() {
 }
 
 async function loadReport() {
-  const res = await fetch(`/api/resumes/${RESUME_ID}`, {credentials:'include'});
+  const res = await fetch(`/api/resumes/${RESUME_ID}`, { credentials: 'include' });
   if (!res.ok) { document.getElementById('report-content').innerHTML = '<div class="error-state">Report not found.</div>'; return; }
   const data = await res.json();
   document.getElementById('report-title').textContent = data.original_name;
@@ -65,9 +85,9 @@ async function loadReport() {
 }
 
 function scoreColor(s) {
-  if (s >= 75) return '#16A34A';
-  if (s >= 50) return '#D97706';
-  return '#DC2626';
+  if (s >= 75) return '#10B981';
+  if (s >= 50) return '#F59E0B';
+  return '#EF4444';
 }
 function scoreLabel(s) {
   if (s >= 75) return 'Excellent';
@@ -79,10 +99,10 @@ function scoreLabel(s) {
 function renderReport(data) {
   const a = data.analysis || {};
   const overall = data.ats_score || 0;
-  const color   = scoreColor(overall);
+  const color = scoreColor(overall);
   const chips = (arr, cls) => (arr||[]).slice(0,20).map(k=>`<span class="chip ${cls}">${k}</span>`).join('');
-  const secs  = (arr, icon) => (arr||[]).map(s=>`<div class="section-item ${icon==='✅'?'sec-found':'sec-missing'}">${icon} ${s}</div>`).join('');
-  const sugs  = (arr) => (arr||[]).map(s=>`<div class="suggestion-item">${s}</div>`).join('');
+  const secs = (arr, icon) => (arr||[]).map(s=>`<div class="section-item ${icon==='✅'?'sec-found':'sec-missing'}">${icon} ${s}</div>`).join('');
+  const sugs = (arr) => (arr||[]).map(s=>`<div class="suggestion-item">${s}</div>`).join('');
 
   document.getElementById('report-content').innerHTML = `
     <div class="score-hero" style="--score-color:${color}">
@@ -91,7 +111,7 @@ function renderReport(data) {
           <circle cx="60" cy="60" r="52" fill="none" stroke="#E2E8F0" stroke-width="10"/>
           <circle cx="60" cy="60" r="52" fill="none" stroke="${color}" stroke-width="10"
             stroke-dasharray="${2*Math.PI*52}" stroke-dashoffset="${2*Math.PI*52*(1-overall/100)}"
-            stroke-linecap="round" transform="rotate(-90 60 60)" class="ring-progress"/>
+            stroke-linecap="round" transform="rotate(-90 60 60)"/>
         </svg>
         <div class="ring-label">
           <div class="ring-score">${overall.toFixed(1)}</div>
@@ -102,17 +122,17 @@ function renderReport(data) {
         <div class="score-grade" style="color:${color}">${scoreLabel(overall)} Match</div>
         <div class="score-breakdown">
           <div class="score-row">
-            <span>Keyword Score</span>
+            <span>Keywords</span>
             <div class="mini-bar"><div class="mini-fill" style="width:${a.keyword_score||0}%;background:${color}"></div></div>
             <span>${(a.keyword_score||0).toFixed(1)}%</span>
           </div>
           <div class="score-row">
-            <span>Skills Score</span>
+            <span>Skills</span>
             <div class="mini-bar"><div class="mini-fill" style="width:${a.skills_score||0}%;background:${color}"></div></div>
             <span>${(a.skills_score||0).toFixed(1)}%</span>
           </div>
           <div class="score-row">
-            <span>Sections Score</span>
+            <span>Sections</span>
             <div class="mini-bar"><div class="mini-fill" style="width:${a.section_score||0}%;background:${color}"></div></div>
             <span>${(a.section_score||0).toFixed(1)}%</span>
           </div>
@@ -127,7 +147,7 @@ function renderReport(data) {
       </div>
       <div class="report-card">
         <h3>❌ Missing Keywords <span class="count-badge">${(a.missing_keywords||[]).length}</span></h3>
-        <div class="chip-cloud">${chips(a.missing_keywords,'chip-red') || '<span class="muted">Great — none missing!</span>'}</div>
+        <div class="chip-cloud">${chips(a.missing_keywords,'chip-red') || '<span class="muted">None missing!</span>'}</div>
       </div>
       <div class="report-card">
         <h3>🛠️ Matched Skills <span class="count-badge">${(a.matched_skills||[]).length}</span></h3>
@@ -143,8 +163,8 @@ function renderReport(data) {
       <div class="report-card report-card-wide">
         <h3>📋 Resume Sections</h3>
         <div class="sections-grid">
-          ${secs(a.sections_found, '✅')}
-          ${secs(a.sections_missing, '❌')}
+          ${secs(a.sections_found,'✅')}
+          ${secs(a.sections_missing,'❌')}
         </div>
       </div>
       <div class="report-card report-card-wide">
@@ -160,7 +180,7 @@ function downloadPDF() {
 }
 
 async function logout() {
-  await fetch('/api/auth/logout', {method:'POST', credentials:'include'});
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
   window.location.href = '/';
 }
 

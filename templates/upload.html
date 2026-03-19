@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Analyze Resume — ATS Pro</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -10,12 +10,24 @@
 </head>
 <body class="app-page">
 
-<nav class="sidebar">
-  <div class="sidebar-brand"><span class="brand-icon">⚡</span><span class="brand-name">ATS<strong>Pro</strong></span></div>
+<div class="mobile-topbar">
+  <button class="hamburger" onclick="toggleSidebar()">☰</button>
+  <span class="mobile-brand">⚡ ATS<strong>Pro</strong></span>
+  <span></span>
+</div>
+
+<div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <span class="brand-icon">⚡</span>
+    <span class="brand-name">ATS<strong>Pro</strong></span>
+    <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+  </div>
   <ul class="sidebar-nav">
-    <li class="nav-item"><a href="/dashboard">📊 Dashboard</a></li>
-    <li class="nav-item active"><a href="/upload">📤 Analyze Resume</a></li>
-    <li class="nav-item" id="admin-link" style="display:none"><a href="/admin">🛡️ Admin Panel</a></li>
+    <li class="nav-item"><a href="/dashboard" onclick="closeSidebar()">📊 Dashboard</a></li>
+    <li class="nav-item active"><a href="/upload" onclick="closeSidebar()">📤 Analyze Resume</a></li>
+    <li class="nav-item" id="admin-link" style="display:none"><a href="/admin" onclick="closeSidebar()">🛡️ Admin Panel</a></li>
   </ul>
   <div class="sidebar-footer">
     <div class="user-chip">
@@ -37,7 +49,7 @@
       <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
         <input type="file" id="file-input" accept=".pdf,.docx" hidden onchange="handleFile(this.files[0])">
         <div class="dropzone-icon">📎</div>
-        <div class="dropzone-text">Drop your resume here or <u>click to browse</u></div>
+        <div class="dropzone-text">Tap to browse your resume</div>
         <div class="dropzone-hint">PDF or DOCX · Max 10MB</div>
         <div id="file-preview" class="file-preview" style="display:none"></div>
       </div>
@@ -45,8 +57,8 @@
 
     <div class="upload-step">
       <div class="step-label"><span class="step-num">2</span> Paste Job Description</div>
-      <textarea id="jd-input" class="jd-textarea" placeholder="Paste the full job description here. The more detail, the better the ATS analysis…" rows="12"></textarea>
-      <div class="jd-hint">Tip: Include the full posting including requirements, responsibilities, and desired skills.</div>
+      <textarea id="jd-input" class="jd-textarea" placeholder="Paste the full job description here. The more detail, the better the ATS analysis…" rows="10"></textarea>
+      <div class="jd-hint">Tip: Include requirements, responsibilities, and desired skills.</div>
     </div>
 
     <div class="upload-step">
@@ -69,8 +81,17 @@
 const firebaseConfig = {{ firebase_config | tojson }};
 if (firebaseConfig.apiKey) firebase.initializeApp(firebaseConfig);
 
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
 async function checkAuth() {
-  const res = await fetch('/api/auth/me', {credentials:'include'});
+  const res = await fetch('/api/auth/me', { credentials: 'include' });
   const d = await res.json();
   if (!d.authenticated) { window.location.href = '/'; return; }
   document.getElementById('user-name').textContent = d.user.name;
@@ -87,7 +108,7 @@ function handleFile(file) {
   document.getElementById('dropzone').classList.add('has-file');
 }
 
-// Drag-drop
+// Drag-drop (desktop only)
 const dz = document.getElementById('dropzone');
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
 dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
@@ -142,7 +163,7 @@ function hideProgress() {
 }
 
 async function logout() {
-  await fetch('/api/auth/logout', {method:'POST', credentials:'include'});
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
   window.location.href = '/';
 }
 
